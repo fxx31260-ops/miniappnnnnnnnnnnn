@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Магазин</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: var(--tg-theme-bg-color, #111);
+      color: var(--tg-theme-text-color, #fff);
+      padding: 16px;
+      margin: 0;
+    }
+    .box {
+      max-width: 480px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    select, input, button {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid #444;
+      background: var(--tg-theme-secondary-bg-color, #222);
+      color: var(--tg-theme-text-color, #fff);
+      font-size: 15px;
+      box-sizing: border-box;
+    }
+    button {
+      background: var(--tg-theme-button-color, #2ea6ff);
+      color: var(--tg-theme-button-text-color, #fff);
+      border: none;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .calc-box {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid #444;
+      background: var(--tg-theme-secondary-bg-color, #222);
+    }
+    .calc-box.hidden {
+      display: none;
+    }
+    .total {
+      font-size: 18px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h3>Донат и накрутка</h3>
+
+    <select id="section"></select>
+    <select id="name"></select>
+    <select id="tariff"></select>
+
+    <input id="target" type="text" placeholder="Ссылка или ID игрока" />
+
+    <div id="calcBlock" class="calc-box">
+      <div id="calcTitle">Калькулятор (за 1 шт)</div>
+      <input id="qty" type="number" min="1" value="1" placeholder="Количество" />
+      <div class="total">Итого: <span id="total">0 ₽</span></div>
+    </div>
+
+    <div id="fixedTotalBlock" class="total hidden">Итого: <span id="fixedTotal">0 ₽</span></div>
+
+    <button id="send">Оформить заказ</button>
+  </div>
+
+  <script>
+    const tg = window.Telegram.WebApp;
+    tg.ready();
+    tg.expand();
+
+    const CATALOG = {
+      "Донат для игр": {
+        "PUBG Mobile": {
+          "60 UC": 75,
+          "120 UC": 150,
+          "1800 UC": 1200,
+          "2100 UC": 1800,
+          "3750 UC": 3333,
+          "6000 UC": 5000,
+          "8100 UC": 7600,
+          "13500 UC": 10500
+        },
+        "Roblox": {
+          "1 Robux (калькулятор)": 1,
+          "40 Robux": 40
+        },
+        "Free Fire": {
+          "110 алмазов": 90,
+          "341 алмаз": 280,
+          "572 алмаза": 500
+        },
+        "Brawl Stars": {
+          "30 гемов": 150,
+          "80 гемов": 350,
+          "170 гемов": 700
+        },
+        "Clash Royale": {
+          "80 гемов": 150,
+          "500 гемов": 750,
+          "Pass Royale": 650
+        }
+      },
+      "Накрутка соцсетей": {
+        "Telegram — Просмотры": {
+          "Супер Эконом": 0.04,
+          "Эконом": 0.08,
+          "Быстрые": 0.10,
+          "Для ТОПа (Из поиска)": 0.30,
+          "Живые пользователи": 0.63,
+          "Один просмотр в ми...": 0.09,
+          "Два просмотра в ми...": 0.09,
+          "Пять просмотров в м...": 0.09,
+          "Десять просмотров в...": 0.09,
+          "Двадцать просмотр...": 0.09
+        },
+        "Telegram — Реакции": {
+          "Реакции 🥰🔥🎉💯😍...": 0.12,
+          "Реакции 👍❤️🎉🔥👏...": 0.12,
+          "Реакции 👎😁😢💩🤮...": 0.22,
+          "Реакция ❤️ на пост": 0.08,
+          "Реакция 🔥 на пост": 0.08,
+          "Реакция 😢 на пост": 0.08,
+          "Реакция 👍 на пост": 0.08,
+          "Реакция 😱 на пост": 0.08,
+          "Реакция 💩 на пост": 0.08,
+          "Реакция 🙏 на пост": 0.08,
+          "Реакция 🥰 на пост": 0.08,
+          "Реакция 👌 на пост": 0.08,
+          "Реакция 🤮 на пост": 0.08,
+          "Реакция 🗿 на пост": 0.08
+        },
+        "Telegram — Подписчики": {
+          "Супер Эконом": 0.60,
+          "Эконом": 1.12,
+          "Стандарт (без моде...": 1.12,
+          "Стандарт": 2.27,
+          "Подписчики с онлай...": 2.257,
+          "Офферные РФ/СНГ": 13.14,
+          "Живые пользователи": 23.76,
+          "Участники в чат": 0.54
+        },
+        "Telegram — Подписчики в Telegram-боты": {
+          "Подписчики в бот": 37.62,
+          "Старт бота + активно...": 0.95
+        },
+        "Telegram — Репосты": {
+          "Эконом": 0.21,
+          "Стандарт": 0.24,
+          "Премиум": 0.48
+        },
+        "Telegram — Комментарии": {
+          "Рандомные коммент...": 6.27,
+          "Стандарт, собственн...": 7.63
+        },
+        "TikTok — Подписчики": {
+          "Эконом": 2.01,
+          "Стандарт": 25.08
+        },
+        "TikTok — Просмотры": {
+          "Супер Эконом": 0.05,
+          "Эконом": 0.08,
+          "Стандарт": 0.11,
+          "Премиум": 1.22
+        },
+        "TikTok — Лайки": {
+          "Очень эконом": 0.402,
+          "Эконом": 1.34,
+          "Стандарт": 4.19,
+          "Премиум": 15.68
+        },
+        "TikTok — Репосты": {
+          "Эконом": 0.18,
+          "Стандарт": 0.13
+        },
+        "TikTok — Просмотры историй": {
+          "Все активные истории": 0.18
+        },
+        "TikTok — Комментарии": {
+          "Позитивные": 5.28,
+          "Живые пользователи": 46.20
+        },
+        "TikTok — Сохранения": {
+          "Эконом": 0.54,
+          "Стандарт": 0.01
+        },
+        "YouTube — Подписчики": {
+          "Эконом": 15.84,
+          "Премиум": 20.09,
+          "Живые": 31.35,
+          "Живые · с видео": 24.00,
+          "Живые · без видео": 22.11,
+          "Россия и СНГ": 33.48,
+          "Из поиска · РФ и Укр...": 25.80,
+          "Турция · аккаунты 20...": 28.20,
+          "Живые · США": 28.50,
+          "Живые · Европа": 28.50,
+          "Эконом · без восста...": 4.79
+        },
+        "YouTube — Просмотры": {
+          "Эконом": 0.60,
+          "Стандарт (Высокое ...": 16.31,
+          "С дополнительной ак...": 0.79,
+          "AdWords": 0.79,
+          "В онлайн СМИ": 1.14,
+          "Shorts · 30 секунд": 0.86,
+          "Из поиска Google": 1.84,
+          "Нативная реклама": 0.79,
+          "По теме · Музыка": 1.79,
+          "По теме · КрипTOвал...": 1.79,
+          "По теме · Развлечения": 1.79,
+          "По теме · Игры": 1.70,
+          "По теме · Новости": 1.79,
+          "По теме · Кулинария": 1.79,
+          "По теме · Мода": 1.79,
+          "По теме · Технологии": 1.79,
+          "По теме · Автомобили": 1.79,
+          "По теме · Фитнес": 1.79,
+          "Украина": 1.49
+        },
+        "YouTube — Лайки": {
+          "Эконом": 0.57,
+          "Стандарт": 5.02,
+          "Премиум": 1.68,
+          "На комментарий · РФ...": 3.00,
+          "Shorts · гарантия": 0.41,
+          "На комментарий · ст...": 1.69,
+          "Из поиска Google · P...": 2.50,
+          "Эконом · восстановл...": 0.24,
+          "На ответ к коммента...": 1.69,
+          "США": 0.27,
+          "Россия": 1.68,
+          "Индия": 0.27,
+          "Турция": 0.27,
+          "Италия": 0.27
+        },
+        "Likee — Подписчики": {
+          "Эконом": 3.77,
+          "Стандарт": 11.29,
+          "Премиум": 15.05
+        },
+        "Likee — Лайки": {
+          "Эконом": 1.51,
+          "Стандарт": 2.43,
+          "Премиум": 15.05
+        },
+        "Likee — Просмотры": {
+          "Эконом": 0.38,
+          "Стандарт": 1.46,
+          "Премиум": 5.65
+        },
+        "Likee — Репосты": {
+          "Эконом": 0.92,
+          "Стандарт": 5.65
+        },
+        "Instagram — Подписчики": {
+          "Супер Эконом": 1.12,
+          "Эконом, гарантия 30 ...": 1.30,
+          "Эконом, гарантия 90 ...": 1.39,
+          "Эконом, гарантия 36...": 2.15,
+          "Стандарт": 3.102,
+          "Стандарт +": 7.92,
+          "Премиум": 37.62
+        },
+        "Instagram — Лайки": {
+          "Супер Эконом": 0.39,
+          "Эконом": 1.78,
+          "Стандарт": 2.26,
+          "Премиум": 18.81
+        },
+        "Instagram — Просмотры видео": {
+          "Эконом": 0.20
+        },
+        "Instagram — Сохранения": {
+          "Эконом": 0.04,
+          "Стандарт": 0.27
+        },
+        "Instagram — Комментарии": {
+          "Стандарт, собственн...": 6.60,
+          "Премиум": 39.60,
+          "Эмоджи комментарии": 11.09
+        },
+        "Instagram — Репосты": {
+          "Эконом": 0.23,
+          "Стандарт": 0.31,
+          "Стандарт (В профиль)": 0.46
+        }
+      }
+    };
+
+    const sectionEl = document.getElementById("section");
+    const nameEl = document.getElementById("name");
+    const tariffEl = document.getElementById("tariff");
+    const targetEl = document.getElementById("target");
+    const calcBlockEl = document.getElementById("calcBlock");
+    const calcTitleEl = document.getElementById("calcTitle");
+    const fixedTotalBlockEl = document.getElementById("fixedTotalBlock");
+    const fixedTotalEl = document.getElementById("fixedTotal");
+    const qtyEl = document.getElementById("qty");
+    const totalEl = document.getElementById("total");
+    const sendEl = document.getElementById("send");
+
+    function hasCalc() {
+      return sectionEl.value === "Накрутка соцсетей" || nameEl.value === "Roblox";
+    }
+
+    function fill(el, list) {
+      el.innerHTML = "";
+      list.forEach(item => {
+        const opt = document.createElement("option");
+        opt.value = item;
+        opt.textContent = item;
+        el.appendChild(opt);
+      });
+    }
+
+    function updateNames() {
+      fill(nameEl, Object.keys(CATALOG[sectionEl.value] || {}));
+      updateTariffs();
+    }
+
+    function updateTariffs() {
+      const showCalc = hasCalc();
+      calcBlockEl.classList.toggle("hidden", !showCalc);
+      fixedTotalBlockEl.classList.toggle("hidden", showCalc);
+      calcTitleEl.textContent = nameEl.value === "Roblox"
+        ? "Калькулятор Robux (1 Robux = 1 ₽)"
+        : "Калькулятор накрутки (за 1 шт)";
+
+      const tariffs = (CATALOG[sectionEl.value] || {})[nameEl.value] || {};
+      tariffEl.innerHTML = "";
+      Object.entries(tariffs).forEach(([t, p]) => {
+        const opt = document.createElement("option");
+        opt.value = t;
+        opt.textContent = sectionEl.value === "Накрутка соцсетей" ? `${t} — ${p} ₽/шт` : `${t} — ${p} ₽`;
+        tariffEl.appendChild(opt);
+      });
+      calc();
+    }
+
+    function calc() {
+      const tariffs = (CATALOG[sectionEl.value] || {})[nameEl.value] || {};
+      const price = Number(tariffs[tariffEl.value] || 0);
+      if (!hasCalc()) {
+        fixedTotalEl.textContent = `${price} ₽`;
+        return { price, qty: 1, sum: price };
+      }
+      const qty = Math.max(1, parseInt(qtyEl.value, 10) || 1);
+      const sum = Math.round(price * qty * 1000) / 1000;
+      totalEl.textContent = `${sum} ₽`;
+      return { price, qty, sum };
+    }
+
+    sectionEl.addEventListener("change", updateNames);
+    nameEl.addEventListener("change", updateTariffs);
+    tariffEl.addEventListener("change", calc);
+    qtyEl.addEventListener("input", calc);
+
+    sendEl.addEventListener("click", () => {
+      const { price, qty, sum } = calc();
+      const target = targetEl.value.trim();
+      if (!target) return alert("Укажите ссылку или ID");
+
+      tg.sendData(JSON.stringify({
+        section: sectionEl.value,
+        name: nameEl.value,
+        tariff: tariffEl.value,
+        price,
+        qty: hasCalc() ? qty : 1,
+        total: hasCalc() ? sum : price,
+        target
+      }));
+    });
+
+    fill(sectionEl, Object.keys(CATALOG));
+    updateNames();
+  </script>
+</body>
+</html>
